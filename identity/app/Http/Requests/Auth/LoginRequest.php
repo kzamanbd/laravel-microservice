@@ -2,9 +2,12 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Exceptions\AuthenticationException;
+use Illuminate\Http\Response;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -37,27 +40,20 @@ class LoginRequest extends FormRequest
      *
      * @throws \Illuminate\Validation\ValidationException
      */
-    public function authenticate(): object
+    public function authenticate(): void
     {
         $this->ensureIsNotRateLimited();
 
         if (!Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
 
-            throw ValidationException::withMessages([
-                'email' => __('auth.failed'),
-            ]);
+            throw new AuthenticationException(
+                message: 'The provided credentials are incorrect.',
+                code: Response::HTTP_UNPROCESSABLE_ENTITY,
+            );
         }
 
         RateLimiter::clear($this->throttleKey());
-
-        $user = Auth::user();
-        $token = $user->createToken('auth-token');
-
-        return response()->json([
-            'message' => 'Authenticated',
-            'token' => $token->plainTextToken,
-        ]);
     }
 
     /**
